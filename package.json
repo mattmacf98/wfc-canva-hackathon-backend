@@ -1,0 +1,25 @@
+{
+  "name": "wfc-canva-hackathon-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "ts-node-dev src/index.ts"
+  },
+  "dependencies": {
+    "@types/cookie-parser": "^1.4.7",
+    "@types/express": "^4.17.21",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jose": "^5.6.3",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.5.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17"
+  },
+  "author": "",
+  "license": "ISC"
+}
