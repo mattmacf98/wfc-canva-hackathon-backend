@@ -29,9 +29,17 @@ app.get("/authorize", async (req, res) => {
         "asset:write",
         "brandtemplate:content:read",
         "brandtemplate:meta:read",
+        "comment:read",
+        "comment:write",
         "design:content:read",
         "design:content:write",
         "design:meta:read",
+        "design:permission:read",
+        "design:permission:write",
+        "folder:read",
+        "folder:write",
+        "folder:permission:read",
+        "folder:permission:write",
         "profile:read",
     ];
     const scopeString = scopes.join(" ");
@@ -130,6 +138,30 @@ app.get("/user", async (req, res) => {
     }
     res.status(400).send();
 });
+
+app.get("/folder", async (req, res) => {
+    const { folderId } = req.query;
+    const authToken = database.getToken(req.signedCookies[AUTH_COOKIE_NAME])
+    console.log(folderId)
+
+    const result = await fetch(`https://api.canva.com/rest/v1/folders/${folderId}/items`, {
+        method: "GET",
+        headers: {
+            "Authorization": `Bearer ${authToken}`,
+        },
+    });
+
+    const data: any = await result.json();
+    const strippedData: any = data["items"].filter((entry: any) => entry["type"] === "asset").map((entry: any) => {
+        const asset: any = entry["asset"]
+        return {
+            id: asset["id"],
+            name: asset["name"],
+            url: asset["thumbnail"]["url"]
+        }
+    });
+    return res.send(strippedData)
+})
 
 app.get("/success", (req, res) => {
     res.send("<p>Success</p>");
