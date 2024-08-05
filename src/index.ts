@@ -3,8 +3,10 @@ import cookieParser from 'cookie-parser';
 import crypto from "node:crypto";
 import dotenv from 'dotenv';
 import cors from "cors";
+import { Readable} from "stream";
 import * as jose from "jose";
 import { Database } from './database';
+import multer from "multer";
 
 dotenv.config();
 
@@ -18,6 +20,8 @@ const port = 3001;
 const OAUTH_CODE_VERIFIER_COOKIE_NAME = "ocv";
 const AUTH_COOKIE_NAME = "aut";
 const database: Database = new Database();
+const storage = multer.memoryStorage();
+const upload = multer({storage});
 
 app.get("/authorize", async (req, res) => {
     const codeVerifier = crypto.randomBytes(96).toString("base64url");
@@ -165,6 +169,68 @@ app.get("/folder", async (req, res) => {
 
 app.get("/success", (req, res) => {
     res.send("<p>Success</p>");
+})
+
+const encode = (str: string):string => Buffer.from(str, 'binary').toString('base64');
+const sleep = async (ms: number): Promise<void> => {
+    return new Promise<void>((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
+
+app.post('/upload', upload.single('image'), async (req, res) => {
+    const {name} = req.query
+    if (!name) {
+        return res.status(400).send("Missing param name")
+    }
+
+    const authToken = database.getToken(req.signedCookies[AUTH_COOKIE_NAME])
+    try {
+        const file = req.file;
+
+        if (!file) {
+            res.status(400).send("No file uploaded");
+            return;
+        }
+
+        const nameB64 = encode(name as string)
+        const response = await fetch("https://api.canva.com/rest/v1/asset-uploads", {
+            method: "POST",
+            headers: {
+                "Asset-Upload-Metadata": JSON.stringify({ "name_base64": nameB64 }),
+                "Authorization": `Bearer ${authToken}`,
+                "Content-Type": "application/octet-stream"
+            },
+            body: file.buffer
+        });
+
+        const data: any = await response.json();
+
+        let statusResponse: any = await (await fetch(`https://api.canva.com/rest/v1/asset-uploads/${data.job.id}`, {
+            method: "GET",
+            headers: {
+                "Authorization": `Bearer ${authToken}`,
+            },
+        })).json();
+
+        while (statusResponse.job.status === "in_progress") {
+            await sleep(1000);
+            statusResponse = await (await fetch(`https://api.canva.com/rest/v1/asset-uploads/${data.job.id}`, {
+                method: "GET",
+                headers: {
+                    "Authorization": `Bearer ${authToken}`,
+                },
+            })).json();
+        }
+
+        if (statusResponse.job.status === "failed") {
+            return res.status(400).send(statusResponse.job.error.message);
+        }
+
+        res.status(200).send("file uploaded successfully")
+    } catch (e: any) {
+        res.status(400).send(e.message);
+    }
 })
 
 database.init()
