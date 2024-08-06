@@ -146,17 +146,26 @@ app.get("/user", async (req, res) => {
 app.get("/folder", async (req, res) => {
     const { folderId } = req.query;
     const authToken = database.getToken(req.signedCookies[AUTH_COOKIE_NAME])
-    console.log(folderId)
 
-    const result = await fetch(`https://api.canva.com/rest/v1/folders/${folderId}/items`, {
-        method: "GET",
-        headers: {
-            "Authorization": `Bearer ${authToken}`,
-        },
-    });
+    let result;
+    try {
+        result = await fetch(`https://api.canva.com/rest/v1/folders/${folderId}/items`, {
+            method: "GET",
+            headers: {
+                "Authorization": `Bearer ${authToken}`,
+            },
+        });
+    } catch (error: any) {
+        return res.status(400).send(error.message);
+    }
+
 
     const data: any = await result.json();
-    const strippedData: any = data["items"].filter((entry: any) => entry["type"] === "asset").map((entry: any) => {
+    if (data.code === "invalid_access_token"){
+        return res.status(400).send(data.message);
+    }
+
+    const assetData: any = data["items"].filter((entry: any) => entry["type"] === "asset").map((entry: any) => {
         const asset: any = entry["asset"]
         return {
             id: asset["id"],
@@ -164,7 +173,16 @@ app.get("/folder", async (req, res) => {
             url: asset["thumbnail"]["url"]
         }
     });
-    return res.send(strippedData)
+
+    const folderData: any = data["items"].filter((entry: any) => entry["type"] === "folder").map((entry: any) => {
+        const folder: any = entry["folder"]
+        return {
+            id: folder["id"],
+            name: folder["name"]
+        }
+    });
+
+    return res.send({assets: assetData, folders: folderData})
 })
 
 app.get("/success", (req, res) => {
