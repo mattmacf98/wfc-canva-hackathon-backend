@@ -3,7 +3,6 @@ import cookieParser from 'cookie-parser';
 import crypto from "node:crypto";
 import dotenv from 'dotenv';
 import cors from "cors";
-import { Readable} from "stream";
 import * as jose from "jose";
 import { Database } from './database';
 import multer from "multer";
@@ -78,7 +77,6 @@ app.get("/authorize", async (req, res) => {
 
 app.get("/oauth/redirect", async (req, res) => {
     const authorizationCode = req.query.code;
-    const state = req.query.state;
     const codeVerifier = req.signedCookies[OAUTH_CODE_VERIFIER_COOKIE_NAME];
 
     const url = "https://api.canva.com/rest/v1/oauth/token";
@@ -109,7 +107,6 @@ app.get("/oauth/redirect", async (req, res) => {
 
         const claims = jose.decodeJwt(data["access_token"]);
         const claimsSub = claims.sub;
-        console.log(claimsSub);
 
         res.cookie(AUTH_COOKIE_NAME, claimsSub, {
             httpOnly: true,
@@ -125,23 +122,6 @@ app.get("/oauth/redirect", async (req, res) => {
         console.log('Error fetching OAuth Token', err);
     }
 })
-
-app.get("/user", async (req, res) => {
-    const authToken = database.getToken(req.signedCookies[AUTH_COOKIE_NAME])
-
-    const result = await fetch("https://api.canva.com/rest/v1/users/me/profile", {
-        method: "GET",
-        headers: {
-            "Authorization": `Bearer ${authToken}`,
-        },
-    });
-    const data: any = await result.json();
-    console.log(data);
-    if (data["profile"]) {
-        return res.send(data["profile"])
-    }
-    res.status(400).send();
-});
 
 app.get("/folder", async (req, res) => {
     const { folderId } = req.query;
