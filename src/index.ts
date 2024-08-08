@@ -11,7 +11,7 @@ dotenv.config();
 
 const app = express();
 app.use(cors({
-    origin: ["http://127.0.0.1:3000"],
+    origin: [String(process.env.FRONTEND_HOST)],
     credentials: true
 }))
 app.use(cookieParser(process.env.DATABASE_ENCRYPTION_KEY));
@@ -55,6 +55,7 @@ app.get("/authorize", async (req, res) => {
     url.searchParams.append("response_type", "code");
     url.searchParams.append("client_id", clientId!);
     url.searchParams.append("state", state);
+    url.searchParams.append("redirect_uri", String(process.env.REDIRECT_URL))
 
     const cookieConfiguration: CookieOptions = {
         httpOnly: true,
@@ -86,7 +87,8 @@ app.get("/oauth/redirect", async (req, res) => {
     const params = new URLSearchParams({
         grant_type: "authorization_code",
         code: authorizationCode!.toString(),
-        code_verifier: codeVerifier
+        code_verifier: codeVerifier,
+        redirect_uri: String(process.env.REDIRECT_URL)
     });
 
     try {
@@ -110,12 +112,13 @@ app.get("/oauth/redirect", async (req, res) => {
 
         res.cookie(AUTH_COOKIE_NAME, claimsSub, {
             httpOnly: true,
-            sameSite: "lax", // for prod do strict
-            secure: false, // true for prod
+            sameSite: "none",
+            secure: process.env.NODE_ENV === "production", // true for prod
             signed: true
         });
 
         database.setToken(claimsSub!, data["access_token"]);
+        console.log(`ID ${claimsSub}`)
 
         return res.redirect("/success");
     } catch (err) {
@@ -125,7 +128,9 @@ app.get("/oauth/redirect", async (req, res) => {
 
 app.get("/folder", async (req, res) => {
     const { folderId } = req.query;
+    console.log(req.signedCookies)
     const authToken = database.getToken(req.signedCookies[AUTH_COOKIE_NAME])
+    console.log(`AUTH TOKEN: ${authToken}`)
 
     let result;
     try {
@@ -141,8 +146,9 @@ app.get("/folder", async (req, res) => {
 
 
     const data: any = await result.json();
+    console.log(data)
     if (data.code === "invalid_access_token"){
-        return res.status(400).send(data.message);
+        return res.status(400).send({error: data.message});
     }
 
     const assetData: any = data["items"].filter((entry: any) => entry["type"] === "asset").map((entry: any) => {
@@ -233,7 +239,7 @@ app.post('/upload', upload.single('image'), async (req, res) => {
 
 database.init()
     .then(() => {
-        app.listen(port, () => {
+        app.listen(process.env.PORT || port, () => {
             console.log(`Server Listening on port http://127.0.0.1:${port}`);
         });
     })
