@@ -6,12 +6,14 @@ import cors from "cors";
 import * as jose from "jose";
 import { Database } from './database';
 import multer from "multer";
+import {ENV_TO_FRONTEND_HOST, ENV_TO_REDIRECT_URL} from "./config";
 
 dotenv.config();
-
+const frontendHost = ENV_TO_FRONTEND_HOST[String(process.env.NODE_ENV)];
+const redirectUrl = ENV_TO_REDIRECT_URL[String(process.env.NODE_ENV)];
 const app = express();
 app.use(cors({
-    origin: [String(process.env.FRONTEND_HOST)],
+    origin: [frontendHost],
     credentials: true
 }))
 app.use(cookieParser(process.env.DATABASE_ENCRYPTION_KEY));
@@ -21,6 +23,7 @@ const AUTH_COOKIE_NAME = "aut";
 const database: Database = new Database();
 const storage = multer.memoryStorage();
 const upload = multer({storage});
+
 
 app.get("/authorize", async (req, res) => {
     const codeVerifier = crypto.randomBytes(96).toString("base64url");
@@ -55,7 +58,7 @@ app.get("/authorize", async (req, res) => {
     url.searchParams.append("response_type", "code");
     url.searchParams.append("client_id", clientId!);
     url.searchParams.append("state", state);
-    url.searchParams.append("redirect_uri", String(process.env.REDIRECT_URL))
+    url.searchParams.append("redirect_uri", redirectUrl)
 
     const cookieConfiguration: CookieOptions = {
         httpOnly: true,
@@ -88,7 +91,7 @@ app.get("/oauth/redirect", async (req, res) => {
         grant_type: "authorization_code",
         code: authorizationCode!.toString(),
         code_verifier: codeVerifier,
-        redirect_uri: String(process.env.REDIRECT_URL)
+        redirect_uri: redirectUrl
     });
 
     try {
@@ -112,13 +115,12 @@ app.get("/oauth/redirect", async (req, res) => {
 
         res.cookie(AUTH_COOKIE_NAME, claimsSub, {
             httpOnly: true,
-            sameSite: "none",
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
             secure: process.env.NODE_ENV === "production", // true for prod
             signed: true
         });
 
         database.setToken(claimsSub!, data["access_token"]);
-        console.log(`ID ${claimsSub}`)
 
         return res.redirect("/success");
     } catch (err) {
@@ -128,9 +130,7 @@ app.get("/oauth/redirect", async (req, res) => {
 
 app.get("/folder", async (req, res) => {
     const { folderId } = req.query;
-    console.log(req.signedCookies)
     const authToken = database.getToken(req.signedCookies[AUTH_COOKIE_NAME])
-    console.log(`AUTH TOKEN: ${authToken}`)
 
     let result;
     try {
@@ -146,7 +146,6 @@ app.get("/folder", async (req, res) => {
 
 
     const data: any = await result.json();
-    console.log(data)
     if (data.code === "invalid_access_token"){
         return res.status(400).send({error: data.message});
     }
